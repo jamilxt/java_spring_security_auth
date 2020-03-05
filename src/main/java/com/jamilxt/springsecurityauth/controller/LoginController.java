@@ -5,7 +5,10 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,7 +39,7 @@ public class LoginController {
 
     @RequestMapping("/*")
     public String getUserInfo(Principal user) {
-        StringBuffer userInfo = new StringBuffer();
+        StringBuilder userInfo = new StringBuilder();
 
         if (user instanceof UsernamePasswordAuthenticationToken) {
             userInfo.append(getUsernamePasswordLoginInfo(user));
@@ -63,17 +66,40 @@ public class LoginController {
     private StringBuffer getOauth2LoginInfo(Principal user) {
         StringBuffer protectedInfo = new StringBuffer();
         OAuth2AuthenticationToken authToken = (OAuth2AuthenticationToken) user;
+        OAuth2User principal = ((OAuth2AuthenticationToken) user).getPrincipal();
 
         OAuth2AuthorizedClient authClient = this.authorizedClientService.loadAuthorizedClient(authToken.getAuthorizedClientRegistrationId(), authToken.getName());
 
-        Map<String, Object> userDetails = ((DefaultOAuth2User) authToken.getPrincipal()).getAttributes();
+        Map<String, Object> userDetails = authToken.getPrincipal().getAttributes();
 
         String userToken = authClient.getAccessToken().getTokenValue();
         protectedInfo.append("Welcome, ").append(userDetails.get("name")).append("<br><br>");
         protectedInfo.append("Email: ").append(userDetails.get("email")).append("<br><br>");
         protectedInfo.append("Access Token: ").append(userToken).append("<br><br>");
 
+        OidcIdToken idToken = getIdToken(principal);
+        if (idToken != null) {
+            protectedInfo.append("idToken value: ").append(idToken.getTokenValue()).append("<br><br>");
+            protectedInfo.append("Token mapped values <br><br>");
+
+            Map<String, Object> claims = idToken.getClaims();
+
+            for (String key : claims.keySet()) {
+                protectedInfo.append("       ").append(key).append(": ").append(claims.get(key)).append("<br>");
+            }
+        } else {
+            protectedInfo.append("NA");
+        }
+
         return protectedInfo;
+    }
+
+    private OidcIdToken getIdToken(OAuth2User principal) {
+        if (principal instanceof DefaultOidcUser) {
+            DefaultOidcUser oidcUser = (DefaultOidcUser) principal;
+            return oidcUser.getIdToken();
+        }
+        return null;
     }
 
 }
